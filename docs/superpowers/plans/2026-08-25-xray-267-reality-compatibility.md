@@ -14,6 +14,7 @@
 
 - Target repositories: `ferras777/hiddify-sing-box`, `ferras777/hiddify-core`, and `ferras777/hiddify-app`.
 - REALITY compatibility bytes: `{26, 7, 0}`; Xray default minimum under test: `{26, 3, 27}`.
+- Core-compatible Sing-box base: `170d8315cab7a8695fd80469073ed2f1d07d63af`; core pin must use a descendant of this commit, not diverged `260b9ef7`.
 - Required core release asset: `hiddify-lib-android.tar.gz`.
 - App version: `4.1.3+40103`; app release tag: `v4.1.3`.
 - Do not change `hiddify-core/go.mod` remote replacements; keep `replace github.com/sagernet/sing-box => ./hiddify-sing-box`.
@@ -32,6 +33,7 @@
 - Modify: `common/tls/reality_client.go`
 - Create: `common/tls/reality_client_test.go`
 - Modify: `go.mod` and `go.sum` only if the self-contained test needs a direct XTLS/REALITY module dependency
+- Create: `.github/workflows/reality-test.yml`
 
 **Interfaces:**
 - Consumes: existing `NewRealityClient`, `RealityClientConfig.ClientHandshake`, and `option.OutboundTLSOptions`.
@@ -64,7 +66,7 @@ serverConfig := &reality.Config{
 }
 ```
 
-Construct the Hiddify client with `option.OutboundTLSOptions` using the matching public key, short ID, `ServerName: "example.com"`, `Reality.Enabled: true`, and `UTLS.Enabled: true`. Accept one TCP connection, wrap it with `reality.Server`, call both sides' handshake methods, write `reality-client-ok` from the client, and assert the server reads the same bytes. Close the fallback server with `defer fallback.Close()` and add deadlines so a rejected `{1, 8, 1}` client fails instead of hanging. Pin `github.com/xtls/reality` to commit `9234c772ba8f181f31c3e81dc2b4177322e5a9a9` if it is not already reachable through the module graph. This remains fully offline; the fallback listener binds only to the local test host.
+Construct the Hiddify client with `option.OutboundTLSOptions` using the matching public key, short ID, `ServerName: "example.com"`, `Reality.Enabled: true`, and `UTLS.Enabled: true`. Run two local server passes. First, use the same fallback/SNI/key/short-ID setup with `MinClientVer: nil`; call `reality.DetectPostHandshakeRecordsLens(probeConfig)` before direct `reality.Server`, start `ClientHandshake` in a goroutine, wait for the returned server connection's exported `ClientVer`, and assert `reality.Value(serverConn.ClientVer[:]...) >= reality.Value(26, 3, 27)`. This makes the reverted branch fail explicitly on the version check instead of failing first on the fallback certificate. Second, configure a fresh REALITY server with `MinClientVer: []byte{26, 3, 27}`, call the detector before `reality.Server`, complete the patched client handshake, write `reality-client-ok`, and assert the server reads the same bytes. Close both fallback/server connections with `defer` and add deadlines so rejected clients fail instead of hanging. Pin `github.com/xtls/reality` to commit `9234c772ba8f181f31c3e81dc2b4177322e5a9a9` if it is not already reachable through the module graph. This remains fully offline; the fallback listener binds only to the local test host.
 
 - [ ] **Step 3: Run the focused test before the source change**
 
@@ -125,7 +127,97 @@ git -C ../hiddify-sing-box-fork merge --ff-only fix/xray-267-reality
 git -C ../hiddify-sing-box-fork push origin extended
 ```
 
-**Acceptance:** The focused test proves a client with the patched bytes passes a server enforcing `{26, 3, 27}` without external infrastructure, and the patched commit is available from the fork's `extended` branch.
+- [ ] **Step 7: Add a dispatchable focused Go workflow and verify RED/GREEN**
+
+Create `.github/workflows/reality-test.yml` in the Sing-box fork:
+
+```yaml
+name: REALITY compatibility
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -tags with_utls ./common/tls -run TestRealityClientVersionAgainstXrayMin -count=1
+```
+
+Commit the workflow on `extended`, then create a test branch with only the client version reverted to the pre-fix bytes to prove RED:
+
+```bash
+git -C ../hiddify-sing-box-fork add .github/workflows/reality-test.yml
+git -C ../hiddify-sing-box-fork commit -m "ci: add focused reality compatibility test"
+git -C ../hiddify-sing-box-fork push origin extended
+git -C ../hiddify-sing-box-fork switch -c test/xray-267-reality-red extended
+git -C ../hiddify-sing-box-fork restore --source=4718d79f0c8d69b60a0f38f6e4c8bbe29afa02eb^ -- common/tls/reality_client.go
+git -C ../hiddify-sing-box-fork commit -am "test: prove old reality version is rejected"
+git -C ../hiddify-sing-box-fork push -u origin test/xray-267-reality-red
+gh workflow run reality-test.yml --repo ferras777/hiddify-sing-box --ref test/xray-267-reality-red
+gh run watch --repo ferras777/hiddify-sing-box $(gh run list --repo ferras777/hiddify-sing-box --workflow reality-test.yml --branch test/xray-267-reality-red --limit 1 --json databaseId --jq '.[0].databaseId')
+test $? -ne 0
+```
+
+Expected RED: the focused test fails because reverted client sends `{1, 8, 1}` below `{26, 3, 27}`. Restore `extended`, dispatch same workflow on patched branch, and require PASS:
+
+```bash
+git -C ../hiddify-sing-box-fork switch extended
+gh workflow run reality-test.yml --repo ferras777/hiddify-sing-box --ref extended
+gh run watch --repo ferras777/hiddify-sing-box $(gh run list --repo ferras777/hiddify-sing-box --workflow reality-test.yml --branch extended --limit 1 --json databaseId --jq '.[0].databaseId')
+```
+
+Expected GREEN: `TestRealityClientVersionAgainstXrayMin` passes on patched commit `d0f9a2acdc19f879fdd9b5cd985d37d0a5e2745e`. Record both run URLs and conclusions in `task-1-report.md`.
+
+**Acceptance:** Focused GitHub Actions test records expected RED on reverted bytes and GREEN on patched bytes; patched commit and focused workflow are available from the fork's `extended` branch.
+
+### Task 1A: Port REALITY patch onto core-compatible Sing-box base
+
+**Repository:** `ferras777/hiddify-sing-box`
+
+**Files:**
+- Modify: `common/tls/reality_client.go`
+- Create/modify: `common/tls/reality_client_test.go`
+- Create: `.github/workflows/reality-test.yml`
+- Modify: `go.mod` and `go.sum` for the test dependency graph
+
+**Interfaces:**
+- Consumes: core's prior submodule commit `170d8315cab7a8695fd80469073ed2f1d07d63af`.
+- Produces: branch `core-compat-xray-267` with a REALITY patch commit that preserves APIs required by `hiddify-core` and passes the focused Actions RED/GREEN test.
+
+- [ ] **Step 1: Create the compatible branch from core's existing submodule commit**
+
+```bash
+git -C ../hiddify-sing-box-fork fetch origin extended
+git -C ../hiddify-sing-box-fork switch -c core-compat-xray-267 170d8315cab7a8695fd80469073ed2f1d07d63af
+```
+
+- [ ] **Step 2: Port only the compatibility patch and test**
+
+Port the named `realityClientVersion` source change, the two-phase local TLS 1.3 REALITY test, and the recursive-submodule focused workflow onto this older Sing-box API line. Preserve the core-compatible `option`/`libbox`/replacement APIs; do not merge unrelated `extended` history. Keep the exact server minimum `{26, 3, 27}`, client advertisement `{26, 7, 0}`, real fallback `Dest`, matching SNI/key/short ID, detector initialization, and sentinel payload assertion.
+
+- [ ] **Step 3: Commit, publish, and run RED/GREEN**
+
+```bash
+git -C ../hiddify-sing-box-fork add common/tls/reality_client.go common/tls/reality_client_test.go .github/workflows/reality-test.yml go.mod go.sum
+git -C ../hiddify-sing-box-fork commit -m "fix: support Xray 26.7 on core base"
+git -C ../hiddify-sing-box-fork push -u origin core-compat-xray-267
+gh workflow run reality-test.yml --repo ferras777/hiddify-sing-box --ref core-compat-xray-267
+gh run watch --repo ferras777/hiddify-sing-box $(gh run list --repo ferras777/hiddify-sing-box --workflow reality-test.yml --branch core-compat-xray-267 --limit 1 --json databaseId --jq '.[0].databaseId')
+```
+
+Create a temporary branch from `core-compat-xray-267` with only the client version reverted to `{1, 8, 1}`, run the same workflow, and record expected explicit RED; then rerun the workflow on `core-compat-xray-267` and record GREEN. Leave `core-compat-xray-267` checked out and record both run URLs in `task-1-report.md`.
+
+**Acceptance:** Core-compatible branch is a descendant of `170d8315`, preserves APIs required by hiddify-core, and focused Actions records explicit RED/GREEN with the exact compatibility test.
 
 ---
 
@@ -140,7 +232,7 @@ git -C ../hiddify-sing-box-fork push origin extended
 - Do not modify: `go.mod` replacement directives
 
 **Interfaces:**
-- Consumes: `ferras777/hiddify-sing-box:extended` and its patched commit.
+- Consumes: `ferras777/hiddify-sing-box:core-compat-xray-267` and its patched descendant of `170d8315`.
 - Produces: Android-only core workflow that publishes `hiddify-lib-android.tar.gz`.
 
 - [ ] **Step 1: Create the core fork and check out its release branch**
@@ -158,52 +250,44 @@ Run from the core fork:
 ```bash
 git -C ../hiddify-core-fork submodule set-url hiddify-sing-box https://github.com/ferras777/hiddify-sing-box
 git -C ../hiddify-core-fork submodule update --init hiddify-sing-box
-git -C ../hiddify-core-fork/hiddify-sing-box fetch origin extended
-git -C ../hiddify-core-fork/hiddify-sing-box checkout extended
+git -C ../hiddify-core-fork/hiddify-sing-box fetch origin core-compat-xray-267
+git -C ../hiddify-core-fork/hiddify-sing-box checkout core-compat-xray-267
 git -C ../hiddify-core-fork add .gitmodules hiddify-sing-box
 ```
 
-Verify the core module still contains the local replacement and does not point at a remote Sing-box module:
-
-```bash
-git -C ../hiddify-core-fork diff -- go.mod
-git -C ../hiddify-core-fork submodule status
-```
-
-Expected: `go.mod` has no diff, and the `hiddify-sing-box` gitlink resolves to the patched fork branch commit.
-
 - [ ] **Step 3: Reduce core build matrix to Android**
 
-In `.github/workflows/build.yml`, replace the existing `jobs.build.strategy.matrix.job` list with exactly:
+In `.github/workflows/build.yml`, replace existing `jobs.build.strategy.matrix.job` list with exactly:
 
 ```yaml
 job:
   - { name: 'hiddify-lib-android', os: 'ubuntu-latest', target: 'android' }
 ```
 
-Keep existing checkout with `submodules: 'recursive'`, Go setup, Java 17, NDK `r28`, `make android`, archive, artifact upload, and release upload steps. Do not add a new hand-written AAR build.
+Keep existing checkout with `submodules: 'recursive'`, Go setup, Java 17, NDK `r28`, `make android`, archive, artifact upload, and release upload steps. Do not add a hand-written AAR build.
 
 - [ ] **Step 4: Commit core wiring**
 
 ```bash
 git -C ../hiddify-core-fork add .gitmodules hiddify-sing-box .github/workflows/build.yml
-git -C ../hiddify-core-fork commit -m "build: use patched sing-box for android core"
+git -C ../hiddify-core-fork commit -m "build: use compatible sing-box for android core"
 git -C ../hiddify-core-fork push -u origin release/xray-267-reality
 git -C ../hiddify-core-fork switch main
 git -C ../hiddify-core-fork merge --ff-only release/xray-267-reality
 git -C ../hiddify-core-fork push origin main
 ```
 
-**Acceptance:** Core checkout resolves the patched Sing-box submodule, `go.mod` remains local-replacement based, and only Android build resources are scheduled.
+**Acceptance:** Core checkout resolves the patched descendant of `170d8315`, `go.mod` remains local-replacement based, and only Android build resources are scheduled.
 
 ---
+
 
 ### Task 3: Publish and verify the Android core artifact
 
 **Repository:** `ferras777/hiddify-core`
 
-**Files:**
-- No additional source files
+- Modify: `.github/workflows/build.yml`
+- Modify: `.github/workflows/release.yml`
 
 **Interfaces:**
 - Consumes: core fork `main` and patched Sing-box submodule.
@@ -216,15 +300,44 @@ gh api repos/ferras777/hiddify-core/actions/permissions --jq '{enabled,allowed_a
 ```
 
 If `enabled` is false, enable Actions in the fork settings before tagging. Do not add core secrets; the existing release upload uses `secrets.GITHUB_TOKEN`.
+- [ ] **Step 2: Gate non-Android release jobs**
 
-- [ ] **Step 2: Tag the core release**
+Add this reusable-workflow input under `on.workflow_call.inputs` in `.github/workflows/build.yml`:
+
+```yaml
+android-only:
+  type: boolean
+  required: false
+  default: false
+```
+
+Change these four existing job conditions to include the gate:
+
+```yaml
+if: ${{ inputs.channel == 'prod' && !inputs.android-only }}
+```
+
+Apply it to `update_wrt_hash`, `build-binary`, `make-upload-docker`, and `merge`. Leave the Android `build` and `upload-release` jobs active.
+
+Pass the input from `.github/workflows/release.yml`:
+
+```yaml
+with:
+  upload-artifact: true
+  tag-name: "${{ github.ref_name }}"
+  channel: "${{ github.ref_type == 'tag' && endsWith(github.ref_name, 'dev') && 'dev' || github.ref_type != 'tag' && 'dev' || 'prod' }}"
+  android-only: true
+```
+
+- [ ] **Step 3: Tag the core release**
+
 
 ```bash
 git -C ../hiddify-core-fork tag -a v4.1.1 -m "release: android core with Xray 26.7 REALITY compatibility"
 git -C ../hiddify-core-fork push origin v4.1.1
 ```
 
-- [ ] **Step 3: Watch the Android-only core workflow**
+- [ ] **Step 4: Watch the Android-only core workflow**
 
 ```bash
 gh run list --repo ferras777/hiddify-core --workflow release.yml --limit 5
@@ -233,7 +346,7 @@ gh run watch --repo ferras777/hiddify-core $(gh run list --repo ferras777/hiddif
 
 The run must finish successfully with no Linux, Windows, macOS, or iOS matrix jobs.
 
-- [ ] **Step 4: Verify the published asset name and contents**
+- [ ] **Step 5: Verify the published asset name and contents**
 
 ```bash
 gh release view v4.1.1 --repo ferras777/hiddify-core --json tagName,isDraft,isPrerelease,assets --jq '{tagName,isDraft,isPrerelease,assets:[.assets[].name]}'
@@ -417,6 +530,11 @@ jobs:
         run: |
           set -euo pipefail
           make CORE_URL="$CORE_URL" android-prepare
+
+      - name: Test fork updater parser
+        run: |
+          set -euo pipefail
+          flutter test test/features/app_update/github_release_parser_test.dart
 
       - name: Configure Android signing
         env:
