@@ -43,21 +43,22 @@ jobs:
       - name: Verify fork core archive
         run: |
           set -euo pipefail
-          archive="$RUNNER_TEMP/$CORE_ASSET"
           echo "CORE_URL=$CORE_URL"
           echo "CORE_ASSET=$CORE_ASSET"
           echo "CORE_SHA256=$CORE_SHA256"
           echo "CORE_ARCHIVE_URL=$CORE_URL/$CORE_ASSET"
-          curl --fail --location "$CORE_URL/$CORE_ASSET" --output "$archive"
-          sha256sum "$archive"
-          printf '%s  %s\n' "$CORE_SHA256" "$archive" | sha256sum --check --status
-          tar -tzf "$archive"
+          mkdir -p "$RUNNER_TEMP/core"
+          curl --fail --location "$CORE_URL/$CORE_ASSET" \
+            --output "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
+          sha256sum "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
+          printf '%s  %s\n' "$CORE_SHA256" "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz" | sha256sum --check --status
+          tar -tzf "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
 
-      - name: Prepare Flutter and fork core
+      - name: Prepare Flutter and exact fork core
         run: |
           set -euo pipefail
-          make CORE_URL="$CORE_URL" android-prepare
-
+          make CORE_URL="$CORE_URL" common-prepare
+          make CORE_URL="file://$RUNNER_TEMP/core" android-libs
       - name: Test fork updater parser
         run: |
           set -euo pipefail
@@ -98,7 +99,7 @@ jobs:
           cp build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/Hiddify-Android-arm7.apk
           cp build/app/outputs/flutter-apk/*x86_64*.apk out/Hiddify-Android-x86_64.apk
           cp build/app/outputs/flutter-apk/app-release.apk out/Hiddify-Android-universal.apk
-          sha256sum out/*.apk > out/SHA256SUMS
+          (cd out && sha256sum *.apk > SHA256SUMS)
 
       - uses: actions/upload-artifact@v6
         with:
