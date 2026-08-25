@@ -1,0 +1,117 @@
+name: Android fork release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.38.5'
+  CHANNEL: prod
+  CORE_URL: 'https://github.com/ferras777/hiddify-core/releases/download/v4.1.1'
+  CORE_ASSET: 'hiddify-lib-android.tar.gz'
+  CORE_SHA256: '65144e4ff23a04679e8fd5a908b1924a6cef64b08f6781d5174128efc40b2d20'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2.21.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Fastforge
+        run: |
+          set -euo pipefail
+          make android-install-deps
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Verify fork core archive
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$CORE_ASSET"
+          echo "CORE_URL=$CORE_URL"
+          echo "CORE_ASSET=$CORE_ASSET"
+          echo "CORE_SHA256=$CORE_SHA256"
+          echo "CORE_ARCHIVE_URL=$CORE_URL/$CORE_ASSET"
+          curl --fail --location "$CORE_URL/$CORE_ASSET" --output "$archive"
+          sha256sum "$archive"
+          printf '%s  %s\n' "$CORE_SHA256" "$archive" | sha256sum --check --status
+          tar -tzf "$archive"
+
+      - name: Prepare Flutter and fork core
+        run: |
+          set -euo pipefail
+          make CORE_URL="$CORE_URL" android-prepare
+
+      - name: Test fork updater parser
+        run: |
+          set -euo pipefail
+          flutter test test/features/app_update/github_release_parser_test.dart
+
+      - name: Configure Android signing
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_SIGNING_KEY"
+          test -n "$ANDROID_SIGNING_STORE_PASSWORD"
+          test -n "$ANDROID_SIGNING_KEY_PASSWORD"
+          test -n "$ANDROID_SIGNING_KEY_ALIAS"
+          printf '%s' "$ANDROID_SIGNING_KEY" | base64 --decode > android/key.jks
+          test -s android/key.jks
+          {
+            printf 'storeFile=%s\n' "$GITHUB_WORKSPACE/android/key.jks"
+            printf 'storePassword=%s\n' "$ANDROID_SIGNING_STORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_SIGNING_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_SIGNING_KEY_ALIAS"
+          } > android/key.properties
+          test -s android/key.properties
+
+      - name: Build production APKs
+        run: |
+          set -euo pipefail
+          make CHANNEL=prod android-apk-release
+
+      - name: Collect APKs and checksums
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cp build/app/outputs/flutter-apk/*arm64-v8a*.apk out/Hiddify-Android-arm64.apk
+          cp build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/Hiddify-Android-arm7.apk
+          cp build/app/outputs/flutter-apk/*x86_64*.apk out/Hiddify-Android-x86_64.apk
+          cp build/app/outputs/flutter-apk/app-release.apk out/Hiddify-Android-universal.apk
+          sha256sum out/*.apk > out/SHA256SUMS
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: android-fork-release
+          path: out
+          retention-days: 7
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Hiddify Android ${{ github.ref_name }}
+          prerelease: false
+          files: out/*
