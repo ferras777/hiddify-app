@@ -3,11 +3,11 @@
     <channel>
         <title>Release</title>
         <item>
-            <title>Version 0.13.6</title>
-            <pubDate>Sun, 7 Jan 2024 22:00:00 +0000</pubDate>
+            <title>Version 4.1.3</title>
+            <pubDate>Tue, 25 Aug 2026 00:00:00 +0000</pubDate>
             <enclosure
-                url="https://play.google.com/store/apps/details?id=app.hiddify.com"
-                sparkle:version="0.13.6" sparkle:os="android" />
+                url="https://github.com/ferras777/hiddify-app/releases/download/v4.1.3/Hiddify-Android-universal.apk"
+                sparkle:version="4.1.3" sparkle:os="android" />
         </item>
         <item>
             <title>Version 0.13.6</title>
