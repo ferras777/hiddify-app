@@ -370,46 +370,6 @@ Expected: published, non-draft asset named exactly `hiddify-lib-android.tar.gz`,
 
 **Acceptance:** The exact URL used by the app workflow returns a valid core archive whose checksum is recorded for the app release.
 
-### Task 3A: Update app core artifact reference
-
-**Repository:** `ferras777/hiddify-app`
-
-**Files:**
-- Modify: `.github/workflows/android-release.yml`
-
-**Interfaces:**
-- Consumes: Task 3's published `v4.1.2` core release and its recorded SHA-256.
-- Produces: app workflow that verifies and extracts the rebuilt app-compatible core.
-
-- [ ] **Step 1: Record the new core checksum**
-
-Use the checksum printed by Task 3 for the exact `v4.1.2` asset. Confirm the release metadata before editing the app:
-
-```bash
-gh release view v4.1.2 --repo ferras777/hiddify-core --json isDraft,isPrerelease,assets --jq '{isDraft,isPrerelease,assets:[.assets[].name]}'
-curl --fail --location https://github.com/ferras777/hiddify-core/releases/download/v4.1.2/hiddify-lib-android.tar.gz --output ../hiddify-lib-android-v4.1.2.tar.gz
-sha256sum ../hiddify-lib-android-v4.1.2.tar.gz
-```
-
-- [ ] **Step 2: Pin URL and digest in the app workflow**
-
-Set `CORE_URL` to the `v4.1.2` fork core URL and add `CORE_SHA256` with the checksum from Step 1. In `Verify fork core archive`, verify the downloaded file against the pinned digest:
-
-```bash
-echo "$CORE_SHA256  $RUNNER_TEMP/core/hiddify-lib-android.tar.gz" | sha256sum -c -
-```
-
-Keep the existing local-file `android-libs` extraction so the verified archive, not a second remote response, enters the APK.
-
-- [ ] **Step 3: Commit and push the corrected app core reference**
-
-```bash
-git add .github/workflows/android-release.yml
-git commit -m "ci: pin app-compatible core artifact"
-git push origin main
-```
-
-**Acceptance:** App workflow uses only core release `v4.1.2`, checks its exact SHA-256 before extraction, and no longer references incompatible core release `v4.1.1`.
 
 ---
 
@@ -676,6 +636,49 @@ This push is safe because both fork-hostile workflows were deleted in Task 4.
 **Acceptance:** Workflow has only one Ubuntu job, passes `CORE_URL` as a make command-line variable, validates the exact core archive URL/digest, fails on missing signing secrets, and publishes only fork assets.
 
 ---
+### Task 3A: Update app core artifact reference
+
+**Repository:** `ferras777/hiddify-app`
+
+**Files:**
+- Modify: `.github/workflows/android-release.yml`
+
+**Interfaces:**
+- Consumes: Task 3's published `v4.1.2` core release and its recorded SHA-256.
+- Produces: app workflow that verifies and extracts the rebuilt app-compatible core.
+
+- [ ] **Step 1: Record the new core checksum**
+
+Use the checksum printed by Task 3 for the exact `v4.1.2` asset. Confirm the release metadata before editing the app:
+
+```bash
+gh release view v4.1.2 --repo ferras777/hiddify-core --json isDraft,isPrerelease,assets --jq '{isDraft,isPrerelease,assets:[.assets[].name]}'
+curl --fail --location https://github.com/ferras777/hiddify-core/releases/download/v4.1.2/hiddify-lib-android.tar.gz --output ../hiddify-lib-android-v4.1.2.tar.gz
+sha256sum ../hiddify-lib-android-v4.1.2.tar.gz
+```
+
+- [ ] **Step 2: Pin URL and digest in the app workflow**
+
+Set `CORE_URL` to the `v4.1.2` fork core URL and add `CORE_SHA256` with the checksum from Step 1. In `Verify fork core archive`, verify the downloaded file against the pinned digest:
+
+```bash
+echo "$CORE_SHA256  $RUNNER_TEMP/core/hiddify-lib-android.tar.gz" | sha256sum -c -
+```
+
+Keep the existing local-file `android-libs` extraction so the verified archive, not a second remote response, enters the APK.
+
+- [ ] **Step 3: Commit and push the corrected app core reference**
+
+```bash
+git add .github/workflows/android-release.yml
+git commit -m "ci: pin app-compatible core artifact"
+git push origin main
+```
+
+**Acceptance:** App workflow uses only core release `v4.1.2`, checks its exact SHA-256 before extraction, and no longer references incompatible core release `v4.1.1`.
+
+---
+
 ### Task 6: Configure fork signing and publish the APK release
 
 **Repository:** `ferras777/hiddify-app`
