@@ -543,6 +543,7 @@ env:
   FLUTTER_VERSION: '3.38.5'
   CHANNEL: prod
   CORE_URL: 'https://github.com/ferras777/hiddify-core/releases/download/v4.1.2'
+  CORE_SHA256: '35c38b77c9f164818e01dceb5f730845a27cff2e6faf8e4a5440617fbfe649c0'
 
 jobs:
   build:
@@ -577,6 +578,7 @@ jobs:
           curl --fail --location "$CORE_URL/hiddify-lib-android.tar.gz" \
             --output "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
           sha256sum "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
+          echo "$CORE_SHA256  $RUNNER_TEMP/core/hiddify-lib-android.tar.gz" | sha256sum -c -
           tar -tzf "$RUNNER_TEMP/core/hiddify-lib-android.tar.gz"
 
       - name: Prepare Flutter and exact fork core
