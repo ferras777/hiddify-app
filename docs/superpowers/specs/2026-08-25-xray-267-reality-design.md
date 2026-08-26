@@ -28,13 +28,13 @@ Use three repositories owned by `ferras777`:
 - `ferras777/hiddify-core`: existing core build with its `hiddify-sing-box` submodule pointed at the patched fork.
 - `ferras777/hiddify-app`: Android-only release workflow, updater endpoints, appcast, version, and release cleanup.
 
-`hiddify-core/go.mod` already uses the local replacement `github.com/sagernet/sing-box => ./hiddify-sing-box`; do not replace it with a remote module. Change only the submodule URL and gitlink commit in the core fork. The patched Sing-box fork keeps `module github.com/sagernet/sing-box`, so sibling local replacements remain valid.
+`hiddify-core` must be built from the official app-compatible `v4.1.0` source commit `c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0`, whose Singbox submodule base is `0a02b7729f6a211436bb8bdcd8696c283eb27767`. Its `go.mod` already uses the local replacement `github.com/sagernet/sing-box => ./hiddify-sing-box`; do not replace it with a remote module. Change only the submodule URL and gitlink commit in the core fork. The patched Sing-box fork keeps `module github.com/sagernet/sing-box`, so sibling local replacements remain valid.
 
 ## Core artifact
 
-Reuse `hiddify-core/.github/workflows/build.yml`. Restrict its matrix to the existing Android job `hiddify-lib-android` / `target: android`; remove Linux, Windows, macOS, and iOS jobs for this fork release. The workflow already installs NDK, runs `make android`, and uploads `hiddify-lib-android.tar.gz`.
+Reuse `hiddify-core/.github/workflows/build.yml`. Restrict its matrix to the existing Android job `hiddify-lib-android` / `target: android`; gate non-Android release jobs for the fork. The workflow already installs NDK, runs `make android`, and uploads `hiddify-lib-android.tar.gz`.
 
-Core release tag: `v4.1.1`.
+Core release tag: `v4.1.2`; earlier fork tag `v4.1.1` is retained as a failed API-compatibility attempt and must not be used by the app.
 
 Required asset:
 

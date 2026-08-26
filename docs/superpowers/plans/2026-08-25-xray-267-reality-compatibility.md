@@ -14,7 +14,7 @@
 
 - Target repositories: `ferras777/hiddify-sing-box`, `ferras777/hiddify-core`, and `ferras777/hiddify-app`.
 - REALITY compatibility bytes: `{26, 7, 0}`; Xray default minimum under test: `{26, 3, 27}`.
-- Core-compatible Sing-box base: `170d8315cab7a8695fd80469073ed2f1d07d63af`; core pin must use a descendant of this commit, not diverged `260b9ef7`.
+- App-compatible core source: official hiddify-core `v4.1.0` tag commit `c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0`; its Singbox base is `0a02b7729f6a211436bb8bdcd8696c283eb27767`.
 - Required core release asset: `hiddify-lib-android.tar.gz`.
 - App version: `4.1.3+40103`; app release tag: `v4.1.3`.
 - Do not change `hiddify-core/go.mod` remote replacements; keep `replace github.com/sagernet/sing-box => ./hiddify-sing-box`.
@@ -180,7 +180,7 @@ Expected GREEN: `TestRealityClientVersionAgainstXrayMin` passes on patched commi
 
 **Acceptance:** Focused GitHub Actions test records expected RED on reverted bytes and GREEN on patched bytes; patched commit and focused workflow are available from the fork's `extended` branch.
 
-### Task 1A: Port REALITY patch onto core-compatible Sing-box base
+### Task 1A: Port REALITY patch onto app-compatible Sing-box base
 
 **Repository:** `ferras777/hiddify-sing-box`
 
@@ -191,33 +191,33 @@ Expected GREEN: `TestRealityClientVersionAgainstXrayMin` passes on patched commi
 - Modify: `go.mod` and `go.sum` for the test dependency graph
 
 **Interfaces:**
-- Consumes: core's prior submodule commit `170d8315cab7a8695fd80469073ed2f1d07d63af`.
-- Produces: branch `core-compat-xray-267` with a REALITY patch commit that preserves APIs required by `hiddify-core` and passes the focused Actions RED/GREEN test.
+- Consumes: app release core's prior submodule commit `0a02b7729f6a211436bb8bdcd8696c283eb27767`.
+- Produces: branch `app-release-compat-xray-267` with a REALITY patch that preserves the Android API used by the official app-compatible core.
 
-- [ ] **Step 1: Create the compatible branch from core's existing submodule commit**
+- [ ] **Step 1: Create the app-compatible branch from the official core submodule commit**
 
 ```bash
 git -C ../hiddify-sing-box-fork fetch origin extended
-git -C ../hiddify-sing-box-fork switch -c core-compat-xray-267 170d8315cab7a8695fd80469073ed2f1d07d63af
+git -C ../hiddify-sing-box-fork switch -c app-release-compat-xray-267 0a02b7729f6a211436bb8bdcd8696c283eb27767
 ```
 
 - [ ] **Step 2: Port only the compatibility patch and test**
 
-Port the named `realityClientVersion` source change, the two-phase local TLS 1.3 REALITY test, and the recursive-submodule focused workflow onto this older Sing-box API line. Preserve the core-compatible `option`/`libbox`/replacement APIs; do not merge unrelated `extended` history. Keep the exact server minimum `{26, 3, 27}`, client advertisement `{26, 7, 0}`, real fallback `Dest`, matching SNI/key/short ID, detector initialization, and sentinel payload assertion.
+Port the named `realityClientVersion` source change, the two-phase local TLS 1.3 REALITY test, and the recursive-submodule focused workflow onto this older Sing-box API line. Preserve `ConnectionOwner.AndroidPackageName`, the older `TunOptions` DNS API, and all other APIs consumed by the app-compatible core. Do not merge unrelated `extended` history. Keep client advertisement `{26, 7, 0}`, probe assertion against `{26, 3, 27}`, real fallback `Dest`, matching SNI/key/short ID, detector initialization, exact-minimum handshake, and sentinel payload assertion.
 
 - [ ] **Step 3: Commit, publish, and run RED/GREEN**
 
 ```bash
 git -C ../hiddify-sing-box-fork add common/tls/reality_client.go common/tls/reality_client_test.go .github/workflows/reality-test.yml go.mod go.sum
-git -C ../hiddify-sing-box-fork commit -m "fix: support Xray 26.7 on core base"
-git -C ../hiddify-sing-box-fork push -u origin core-compat-xray-267
-gh workflow run reality-test.yml --repo ferras777/hiddify-sing-box --ref core-compat-xray-267
-gh run watch --repo ferras777/hiddify-sing-box $(gh run list --repo ferras777/hiddify-sing-box --workflow reality-test.yml --branch core-compat-xray-267 --limit 1 --json databaseId --jq '.[0].databaseId')
+git -C ../hiddify-sing-box-fork commit -m "fix: support Xray 26.7 on app core base"
+git -C ../hiddify-sing-box-fork push -u origin app-release-compat-xray-267
+gh workflow run reality-test.yml --repo ferras777/hiddify-sing-box --ref app-release-compat-xray-267
+gh run watch --repo ferras777/hiddify-sing-box $(gh run list --repo ferras777/hiddify-sing-box --workflow reality-test.yml --branch app-release-compat-xray-267 --limit 1 --json databaseId --jq '.[0].databaseId')
 ```
 
-Create a temporary branch from `core-compat-xray-267` with only the client version reverted to `{1, 8, 1}`, run the same workflow, and record expected explicit RED; then rerun the workflow on `core-compat-xray-267` and record GREEN. Leave `core-compat-xray-267` checked out and record both run URLs in `task-1-report.md`.
+Create `test/app-release-compat-xray-267-red` from the patched branch, restore only `common/tls/reality_client.go` from `HEAD^`, push it, run the same workflow, and require explicit RED on the client-version assertion. Switch back to `app-release-compat-xray-267`, rerun the workflow, and require GREEN with the exact-minimum handshake and payload. Record both run URLs in `task-1-report.md`.
 
-**Acceptance:** Core-compatible branch is a descendant of `170d8315`, preserves APIs required by hiddify-core, and focused Actions records explicit RED/GREEN with the exact compatibility test.
+**Acceptance:** `app-release-compat-xray-267` is a descendant of `0a02b772`, preserves APIs required by the official app-compatible core, and focused Actions records explicit RED/GREEN.
 
 ---
 
@@ -232,15 +232,16 @@ Create a temporary branch from `core-compat-xray-267` with only the client versi
 - Do not modify: `go.mod` replacement directives
 
 **Interfaces:**
-- Consumes: `ferras777/hiddify-sing-box:core-compat-xray-267` and its patched descendant of `170d8315`.
+- Consumes: `ferras777/hiddify-sing-box:app-release-compat-xray-267` and its descendant of `0a02b772`.
 - Produces: Android-only core workflow that publishes `hiddify-lib-android.tar.gz`.
 
-- [ ] **Step 1: Create the core fork and check out its release branch**
+- [ ] **Step 1: Create an app-compatible core release branch**
 
 ```bash
 gh repo fork hiddify/hiddify-core --clone=false
 git clone --recurse-submodules https://github.com/ferras777/hiddify-core.git ../hiddify-core-fork
-git -C ../hiddify-core-fork switch -c release/xray-267-reality
+git -C ../hiddify-core-fork fetch origin c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0
+git -C ../hiddify-core-fork switch -c release/xray-267-app-compat c9d6f0f00b2eda34e4fb71863e4e0a62b3e931a0
 ```
 
 - [ ] **Step 2: Repoint only the Sing-box submodule**
@@ -250,10 +251,19 @@ Run from the core fork:
 ```bash
 git -C ../hiddify-core-fork submodule set-url hiddify-sing-box https://github.com/ferras777/hiddify-sing-box
 git -C ../hiddify-core-fork submodule update --init hiddify-sing-box
-git -C ../hiddify-core-fork/hiddify-sing-box fetch origin core-compat-xray-267
-git -C ../hiddify-core-fork/hiddify-sing-box checkout core-compat-xray-267
+git -C ../hiddify-core-fork/hiddify-sing-box fetch origin app-release-compat-xray-267
+git -C ../hiddify-core-fork/hiddify-sing-box checkout app-release-compat-xray-267
 git -C ../hiddify-core-fork add .gitmodules hiddify-sing-box
 ```
+
+Verify the core module still contains the local replacement and does not point at a remote Sing-box module:
+
+```bash
+git -C ../hiddify-core-fork diff -- go.mod
+git -C ../hiddify-core-fork submodule status
+```
+
+Expected: `go.mod` has no diff, and the `hiddify-sing-box` gitlink resolves to the patched app-compatible branch commit.
 
 - [ ] **Step 3: Reduce core build matrix to Android**
 
@@ -266,20 +276,20 @@ job:
 
 Keep existing checkout with `submodules: 'recursive'`, Go setup, Java 17, NDK `r28`, `make android`, archive, artifact upload, and release upload steps. Do not add a hand-written AAR build.
 
-- [ ] **Step 4: Commit core wiring**
+- [ ] **Step 4: Commit core wiring on the release branch**
 
 ```bash
 git -C ../hiddify-core-fork add .gitmodules hiddify-sing-box .github/workflows/build.yml
-git -C ../hiddify-core-fork commit -m "build: use compatible sing-box for android core"
-git -C ../hiddify-core-fork push -u origin release/xray-267-reality
-git -C ../hiddify-core-fork switch main
-git -C ../hiddify-core-fork merge --ff-only release/xray-267-reality
-git -C ../hiddify-core-fork push origin main
+git -C ../hiddify-core-fork commit -m "build: use app-compatible sing-box for android core"
+git -C ../hiddify-core-fork push -u origin release/xray-267-app-compat
 ```
 
-**Acceptance:** Core checkout resolves the patched descendant of `170d8315`, `go.mod` remains local-replacement based, and only Android build resources are scheduled.
+Do not merge this branch into the existing fork `main`; that branch contains the superseded `v4.1.1` API line. Task 3 tags this app-compatible release branch directly.
+
+**Acceptance:** Core release branch starts at official app-compatible core `c9d6f0f`, resolves the patched Singbox descendant of `0a02b772`, preserves local replacement directives, and schedules only Android build resources.
 
 ---
+
 
 
 ### Task 3: Publish and verify the Android core artifact
@@ -290,8 +300,8 @@ git -C ../hiddify-core-fork push origin main
 - Modify: `.github/workflows/release.yml`
 
 **Interfaces:**
-- Consumes: core fork `main` and patched Sing-box submodule.
-- Produces: GitHub Release `v4.1.1` with `hiddify-lib-android.tar.gz`.
+- Consumes: core branch `release/xray-267-app-compat` at app-compatible source `c9d6f0f` with patched Singbox submodule.
+- Produces: GitHub Release `v4.1.2` with `hiddify-lib-android.tar.gz`.
 
 - [ ] **Step 1: Confirm Actions is enabled on the core fork**
 
@@ -333,8 +343,9 @@ with:
 
 
 ```bash
-git -C ../hiddify-core-fork tag -a v4.1.1 -m "release: android core with Xray 26.7 REALITY compatibility"
-git -C ../hiddify-core-fork push origin v4.1.1
+git -C ../hiddify-core-fork switch release/xray-267-app-compat
+git -C ../hiddify-core-fork tag -a v4.1.2 -m "release: Android core with Xray 26.7 REALITY compatibility"
+git -C ../hiddify-core-fork push origin v4.1.2
 ```
 
 - [ ] **Step 4: Watch the Android-only core workflow**
@@ -349,8 +360,8 @@ The run must finish successfully with no Linux, Windows, macOS, or iOS matrix jo
 - [ ] **Step 5: Verify the published asset name and contents**
 
 ```bash
-gh release view v4.1.1 --repo ferras777/hiddify-core --json tagName,isDraft,isPrerelease,assets --jq '{tagName,isDraft,isPrerelease,assets:[.assets[].name]}'
-curl --fail --location https://github.com/ferras777/hiddify-core/releases/download/v4.1.1/hiddify-lib-android.tar.gz --output ../hiddify-lib-android.tar.gz
+gh release view v4.1.2 --repo ferras777/hiddify-core --json tagName,isDraft,isPrerelease,assets --jq '{tagName,isDraft,isPrerelease,assets:[.assets[].name]}'
+curl --fail --location https://github.com/ferras777/hiddify-core/releases/download/v4.1.2/hiddify-lib-android.tar.gz --output ../hiddify-lib-android.tar.gz
 tar -tzf ../hiddify-lib-android.tar.gz
 sha256sum ../hiddify-lib-android.tar.gz
 ```
@@ -358,6 +369,47 @@ sha256sum ../hiddify-lib-android.tar.gz
 Expected: published, non-draft asset named exactly `hiddify-lib-android.tar.gz`, containing the Android core AAR and its expected supporting files.
 
 **Acceptance:** The exact URL used by the app workflow returns a valid core archive whose checksum is recorded for the app release.
+
+### Task 3A: Update app core artifact reference
+
+**Repository:** `ferras777/hiddify-app`
+
+**Files:**
+- Modify: `.github/workflows/android-release.yml`
+
+**Interfaces:**
+- Consumes: Task 3's published `v4.1.2` core release and its recorded SHA-256.
+- Produces: app workflow that verifies and extracts the rebuilt app-compatible core.
+
+- [ ] **Step 1: Record the new core checksum**
+
+Use the checksum printed by Task 3 for the exact `v4.1.2` asset. Confirm the release metadata before editing the app:
+
+```bash
+gh release view v4.1.2 --repo ferras777/hiddify-core --json isDraft,isPrerelease,assets --jq '{isDraft,isPrerelease,assets:[.assets[].name]}'
+curl --fail --location https://github.com/ferras777/hiddify-core/releases/download/v4.1.2/hiddify-lib-android.tar.gz --output ../hiddify-lib-android-v4.1.2.tar.gz
+sha256sum ../hiddify-lib-android-v4.1.2.tar.gz
+```
+
+- [ ] **Step 2: Pin URL and digest in the app workflow**
+
+Set `CORE_URL` to the `v4.1.2` fork core URL and add `CORE_SHA256` with the checksum from Step 1. In `Verify fork core archive`, verify the downloaded file against the pinned digest:
+
+```bash
+echo "$CORE_SHA256  $RUNNER_TEMP/core/hiddify-lib-android.tar.gz" | sha256sum -c -
+```
+
+Keep the existing local-file `android-libs` extraction so the verified archive, not a second remote response, enters the APK.
+
+- [ ] **Step 3: Commit and push the corrected app core reference**
+
+```bash
+git add .github/workflows/android-release.yml
+git commit -m "ci: pin app-compatible core artifact"
+git push origin main
+```
+
+**Acceptance:** App workflow uses only core release `v4.1.2`, checks its exact SHA-256 before extraction, and no longer references incompatible core release `v4.1.1`.
 
 ---
 
@@ -469,7 +521,7 @@ git push origin main
 - Create: `.github/workflows/android-release.yml`
 
 **Interfaces:**
-- Consumes: core release URL `https://github.com/ferras777/hiddify-core/releases/download/v4.1.1` and four fork signing secrets.
+- Consumes: core release URL `https://github.com/ferras777/hiddify-core/releases/download/v4.1.2` and four fork signing secrets.
 - Produces: APK files named `Hiddify-Android-arm64.apk`, `Hiddify-Android-arm7.apk`, `Hiddify-Android-x86_64.apk`, and `Hiddify-Android-universal.apk`, plus `SHA256SUMS` and GitHub Release `v4.1.3`.
 
 - [ ] **Step 1: Add the tag-triggered workflow**
@@ -490,7 +542,7 @@ permissions:
 env:
   FLUTTER_VERSION: '3.38.5'
   CHANNEL: prod
-  CORE_URL: 'https://github.com/ferras777/hiddify-core/releases/download/v4.1.1'
+  CORE_URL: 'https://github.com/ferras777/hiddify-core/releases/download/v4.1.2'
 
 jobs:
   build:
@@ -622,7 +674,6 @@ This push is safe because both fork-hostile workflows were deleted in Task 4.
 **Acceptance:** Workflow has only one Ubuntu job, passes `CORE_URL` as a make command-line variable, validates the exact core archive URL/digest, fails on missing signing secrets, and publishes only fork assets.
 
 ---
-
 ### Task 6: Configure fork signing and publish the APK release
 
 **Repository:** `ferras777/hiddify-app`
@@ -632,7 +683,7 @@ This push is safe because both fork-hostile workflows were deleted in Task 4.
 - GitHub Actions secrets and release tag are repository state
 
 **Interfaces:**
-- Consumes: Android-only workflow and core release `v4.1.1`.
+- Consumes: Android-only workflow and core release `v4.1.2`.
 - Produces: signed fork APK release `v4.1.3`.
 
 - [ ] **Step 1: Generate a fork keystore outside the repository**
@@ -660,8 +711,9 @@ Confirm the app branch contains the workflow deletions and Android workflow, the
 
 ```bash
 git status --short
-git tag -a v4.1.3 -m "release: Xray 26.7 REALITY compatibility"
-git push origin v4.1.3
+git fetch origin refs/tags/v4.1.3
+git tag -f -a v4.1.3 -m "release: Xray 26.7 REALITY compatibility"
+git push --force-with-lease origin v4.1.3
 ```
 
 - [ ] **Step 4: Watch the Android-only run**
