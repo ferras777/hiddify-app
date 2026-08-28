@@ -63,9 +63,9 @@ jobs:
           $version = $versionLine.Matches.Groups[1].Value
           $configPath = 'windows\packaging\msix\make_config.yaml'
           $config = Get-Content $configPath -Raw
-          $config = [regex]::Replace($config, '(?m)^msix_version:.*$', "msix_version: $version.0")
+          $config = [regex]::Replace($config, '(?m)^msix_version:.*$', "msix_version: ${version}.0")
           Set-Content $configPath $config -Encoding utf8
-          Write-Host "MSIX version: $version.0"
+          Write-Host "MSIX version: ${version}.0"
 
       - name: Configure Windows signing
         id: signing
