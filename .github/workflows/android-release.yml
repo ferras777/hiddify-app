@@ -33,6 +33,8 @@ jobs:
           java-version: '17'
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools' # SDK repo dropped legacy 'tools' (v3 default)
 
       - name: Install Fastforge
         run: |

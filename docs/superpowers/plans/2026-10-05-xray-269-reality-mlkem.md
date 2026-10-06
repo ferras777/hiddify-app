@@ -81,6 +81,11 @@ Verified locally (throwaway): filter removed + forced Chrome, client configured 
 
 **Acceptance:** release `v4.1.3` has `hiddify-lib-android.tar.gz` and `hiddify-lib-windows-amd64.tar.gz` built from the patched submodule.
 
+**Done 2026-10-05:** core commit `542b2ca` (gitlink `21f54fb`), tag `v4.1.3`. Release run https://github.com/ferras777/hiddify-core/actions/runs/37371555646 (first attempt cancelled by GitHub Actions outage, rerun green); Windows run https://github.com/ferras777/hiddify-core/actions/runs/37375919892; both logs show `hiddify-sing-box` at `21f54fb`. Main `windows-release.yml` defaults → `542b2ca` / `v4.1.3`.
+
+- `hiddify-lib-android.tar.gz` sha256 `48bf2e98205f4b13d9a5e56cae6d2630f2a4aecae1cb373359b96be5eaa1b524`
+- `hiddify-lib-windows-amd64.tar.gz` sha256 `d76a3809563d4aef7f811e29971bf4f71446b4b3a0ffbd8d6746277a7c2a1b2d`
+
 ### 3. App — `ferras777/hiddify-app`
 
 - `pubspec.yaml` → `4.1.4+40104`.
