@@ -132,4 +132,6 @@ Android phone on a Russian mobile ISP → user's VPS (EU hosting, 3x-ui, VLESS+R
 
 Actions taken: server Xray rolled back to 26.6.22 (`xray-linux-amd64.pre-update`; 26.9.30 kept as `xray-linux-amd64.26.9.30`); app release `v4.1.4` marked pre-release, `v4.1.3` restored as Latest, `appcast.xml` back to `v4.1.3`. Phone runs v4.1.3.
 
+Follow-up release `v4.1.5` (`6b872da`, versionCode 40105): same content as v4.1.3 (core `v4.1.2`, digest-verified in CI), so v4.1.4 installs upgrade in place without losing profiles. Android `libhiddify-core.so` byte-identical to v4.1.3's; Windows `hiddify-core.dll` identical to core v4.1.2 asset; same signing cert as v4.1.3. Latest release + `appcast.xml` → `v4.1.5`.
+
 Open: no known client-side fix for Xray ≥ 26.9.8 + REALITY on this network — every REALITY connection must carry the MLKEM ClientHello. Fewer connections (XHTTP/gRPC reuse) or a non-REALITY transport are untested options.
