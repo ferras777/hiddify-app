@@ -120,3 +120,16 @@ Verified locally (throwaway): filter removed + forced Chrome, client configured 
 Note: target `www.microsoft.com` fails on Xray 26.7.28 for both app versions (`handshake did not complete successfully`) — server-side REALITY target-record buffer bug fixed in `xtls/reality` `393f8de` (Xray 26.9.8), unrelated to the client.
 
 Android: no device available; not validated live. Android APK bundles the same `21f54fb` client code, verified by digest-checked core archive in the release log.
+
+## 5. Field result (2026-10-06): v4.1.4 rolled back
+
+Android phone on a Russian mobile ISP → user's VPS (EU hosting, 3x-ui, VLESS+REALITY TCP, no flow). Evidence from server-side `tcpdump` + temporary Xray access/info log (both removed; raw copies kept only on the server):
+
+- v4.1.4 ClientHello = ~1.8 KB (Chrome-133 with X25519MLKEM768) → two TCP segments (1440 + ~380 B). In failing flows only SYN or the first 1440-B segment reaches the server; the second segment, retransmissions and FIN from the phone never arrive. Server log: `REALITY: processed invalid connection ...: failed to read client hello`. Failures come in waves; a few flows pass between them.
+- A/B, same phone and network, server on Xray 26.6.22: v4.1.4 → 10 of 11 flows stuck; v4.1.3 (Chrome without MLKEM, ClientHello 500–596 B, one segment) → 28 of 28 flows OK, up to 1.6 MB per flow, Telegram works.
+- Conclusion: this path's DPI (TSPU) blackholes REALITY flows whose ClientHello carries the MLKEM key share / spans two segments. Xray 26.9.8+ requires that key share, so on this network Xray ≥ 26.9.8 cannot be used with REALITY over TCP from this client.
+- Also seen: Telegram tried IPv6 DC `2001:67c:4e8:f002::a` through the tunnel; server has no IPv6 (`network is unreachable`). Telegram fell back to IPv4 DCs; not the cause.
+
+Actions taken: server Xray rolled back to 26.6.22 (`xray-linux-amd64.pre-update`; 26.9.30 kept as `xray-linux-amd64.26.9.30`); app release `v4.1.4` marked pre-release, `v4.1.3` restored as Latest, `appcast.xml` back to `v4.1.3`. Phone runs v4.1.3.
+
+Open: no known client-side fix for Xray ≥ 26.9.8 + REALITY on this network — every REALITY connection must carry the MLKEM ClientHello. Fewer connections (XHTTP/gRPC reuse) or a non-REALITY transport are untested options.
