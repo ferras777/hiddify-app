@@ -96,8 +96,27 @@ Verified locally (throwaway): filter removed + forced Chrome, client configured 
 
 **Acceptance:** release `v4.1.4` with 4 signed APKs + `SHA256SUMS` and Windows `Setup-x64.exe` + `Portable-x64.zip`; workflow logs show core `v4.1.3` URL and digest.
 
+**Done 2026-10-06:** app `5c6f55c`, tag `v4.1.4` → https://github.com/ferras777/hiddify-app/releases/tag/v4.1.4.
+
+- Android run https://github.com/ferras777/hiddify-app/actions/runs/37420414669: log shows `CORE_URL=.../v4.1.3`, `CORE_SHA256=48bf2e98…`, `hiddify-lib-android.tar.gz: OK`. First attempt failed in `android-actions/setup-android@v3` (default package `tools` gone from SDK repo) → step now installs only `platform-tools`.
+- Windows run https://github.com/ferras777/hiddify-app/actions/runs/37421721670: `hiddify-core.dll` in `Hiddify-Windows-Portable-x64.zip` is byte-identical to core `v4.1.3` Windows asset (sha256 `4e955863…`); `HiddifyCli version` → `Revision: 542b2ca…`.
+- `appcast.xml` on `main` points to `v4.1.4` universal APK.
+
 ### 4. Runtime check
 
 - Android and Windows: REALITY profiles with `fp=chrome` and `fp=firefox` against Xray `v26.9.30` → traffic flows for both.
 - Same build against a pre-26.9 Xray server → still works.
 - If no live server: record Task 1 CI runs as evidence; do not claim live validation.
+
+**Done 2026-10-06 (Windows, live, local):** real Xray binaries on `127.0.0.1:18443` (VLESS + Vision + REALITY, target `www.apple.com`), client = released `HiddifyCli.exe srun` with sing-box config, probe `curl -x socks5h://127.0.0.1:11080 https://www.google.com/generate_204`:
+
+| App | Server | fp | Result |
+|---|---|---|---|
+| v4.1.3 | Xray 26.9.30 | chrome / firefox | fail, server: `authentication failed or validation criteria not met` |
+| v4.1.3 | Xray 26.7.28 | chrome / firefox | 204 |
+| v4.1.4 | Xray 26.9.30 | chrome / firefox | 204 |
+| v4.1.4 | Xray 26.7.28 | chrome / firefox | 204 |
+
+Note: target `www.microsoft.com` fails on Xray 26.7.28 for both app versions (`handshake did not complete successfully`) — server-side REALITY target-record buffer bug fixed in `xtls/reality` `393f8de` (Xray 26.9.8), unrelated to the client.
+
+Android: no device available; not validated live. Android APK bundles the same `21f54fb` client code, verified by digest-checked core archive in the release log.
